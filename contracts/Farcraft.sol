@@ -56,7 +56,7 @@ contract Farcraft is Initializable, ONFT721Upgradeable, ERC721BurnableUpgradeabl
     }
 
     function mint(address to, uint categoryId) external payable {
-        Category memory category = categories[categoryId];
+        Category storage category = categories[categoryId];
         require(
             category.maxMintId != 0 &&
             (category.nextMintId <= category.maxMintId),
@@ -76,8 +76,6 @@ contract Farcraft is Initializable, ONFT721Upgradeable, ERC721BurnableUpgradeabl
         category.nextMintId++;
 
         _safeMint(to, tokenId);
-        //_setTokenURI(tokenId, uri);
-        //_startStream(tokenId);
     }
 
     function addOrUpdateCategory(uint _id, Category memory _category) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -102,7 +100,6 @@ contract Farcraft is Initializable, ONFT721Upgradeable, ERC721BurnableUpgradeabl
     }
 
     function _send(address _from, uint16 _dstChainId, bytes memory _toAddress, uint _tokenId, address payable, address, bytes memory) internal virtual override {
-        //_debitFrom(_from, _dstChainId, _toAddress, _tokenId);
         _burn(_tokenId);
         _lzSend(
             _dstChainId, 
@@ -128,19 +125,11 @@ contract Farcraft is Initializable, ONFT721Upgradeable, ERC721BurnableUpgradeabl
             }
         } else {
             // @dev this is a token being received from another chain
-            //_creditTo(_srcChainId, toAddress, tokenId);
             require(!_exists(tokenId));
             _safeMint(toAddress, tokenId);
             emit ReceiveFromChain(_srcChainId, _srcAddress, toAddress, tokenId, _nonce);
         }
     }
-
-    //function _creditTo(uint16, address _toAddress, uint _tokenId) internal override {
-    //    require(!_exists(_tokenId));
-    //    _safeMint(_toAddress, _tokenId);
-    //}
-    //function _creditTo(uint16, address, uint) internal override {}
-    //function _debitFrom(address, uint16, bytes memory, uint) internal override {}
 
     function _beforeTokenTransfer(
         address oldReceiver,
@@ -173,13 +162,6 @@ contract Farcraft is Initializable, ONFT721Upgradeable, ERC721BurnableUpgradeabl
         uint256 batchSize
     ) internal override(ERC721Upgradeable, ERC721VotesUpgradeable) {
         return super._afterTokenTransfer(oldReceiver, newReceiver, tokenId, batchSize);
-    }
-
-    /**
-     * @notice The URI of contract-level metadata for OpenSea, etc.
-     */
-    function contractURI() external view returns (string memory) {
-        return string(abi.encodePacked(baseURI, 'contract.json'));
     }
 
     // The following functions are overrides required by Solidity.
