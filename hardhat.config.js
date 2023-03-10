@@ -95,8 +95,7 @@ module.exports = {
     },
     polygon: {
       url: API_URL_POLYGON,
-      accounts: [`0x${PRIVATE_KEY}`],
-      gasPrice: 1000000000 * 40
+      accounts: [`0x${PRIVATE_KEY}`]
     },
     "moonbeam-alpha": {
       url: API_URL_MOONBEAMALPHA,
@@ -107,6 +106,7 @@ module.exports = {
    etherscan: {
     apiKey: {
       goerli: ETHERSCAN_API_KEY,
+      polygon: POLYSCAN_API_KEY,
       polygonMumbai: POLYSCAN_API_KEY,
       "optimism-goerli": OPTISCAN_API_KEY,
       arbitrumgoerli: ARBISCAN_API_KEY,
