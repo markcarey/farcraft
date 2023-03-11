@@ -137,6 +137,36 @@ async function generate(id, config, category) {
   });
 }
 
+async function getGasPrices() {
+  return new Promise(async (resolve, reject) => {
+    var res = await fetch('https://gasstation-mainnet.matic.network/v2');
+    var gas = await res.json();
+    console.log(gas);
+    let block_number = gas.blockNumber;
+    let base_fee = parseFloat(gas.estimatedBaseFee);
+    let max_priority_fee = gas.standard.maxPriorityFee;
+    let max_fee_per_gas = base_fee + max_priority_fee;
+
+    max_fee_per_gas += (base_fee * 0.1);
+
+    console.log(`block_number: ${block_number}`);
+    console.log(`base_fee: ${base_fee.toFixed(9)} gwei`);
+    console.log(`max_priority_fee_per_gas: ${max_priority_fee} gwei`);
+    console.log(`max_fee_per_gas: ${max_fee_per_gas} gwei`);
+
+    //  cast gwei numbers to wei BigNumbers for ethers
+    const maxFeePerGas = ethers.utils.parseUnits(max_fee_per_gas.toFixed(9), 'gwei');
+    const maxPriorityFeePerGas = ethers.utils.parseUnits(max_priority_fee.toFixed(9), 'gwei');
+
+    //  Final object ready to feed into a transaction
+    const gasOptions = {
+        maxFeePerGas,
+        maxPriorityFeePerGas
+    }
+    resolve(gasOptions);
+  });
+}
+
 async function mint(address, config, categoryId) {
   return new Promise(async (resolve, reject) => {
     var tokenId;
@@ -155,10 +185,15 @@ async function mint(address, config, categoryId) {
           console.log("feeData", JSON.stringify(feeData));
         }
         try {
-          const networkGasPrice = await gas.getNetworkGasPrice("polygon");
-          console.log("networkGasPrice", JSON.stringify(networkGasPrice));
-          console.log("maxPriorityFeePerGas", ethers.utils.parseUnits(Math.ceil(networkGasPrice.high.maxPriorityFeePerGas).toString(), "gwei"));
-          console.log("maxFeePerGas", ethers.utils.parseUnits(Math.ceil(networkGasPrice.high.maxFeePerGas).toString(), "gwei"));
+          //const networkGasPrice = await gas.getNetworkGasPrice("polygon");
+          //console.log("networkGasPrice", JSON.stringify(networkGasPrice));
+          //console.log("maxPriorityFeePerGas", ethers.utils.parseUnits(Math.ceil(networkGasPrice.high.maxPriorityFeePerGas).toString(), "gwei"));
+          //console.log("maxFeePerGas", ethers.utils.parseUnits(Math.ceil(networkGasPrice.high.maxFeePerGas).toString(), "gwei"));
+          const gasPrices = await getGasPrices();
+          console.log(gasPrices);
+          if (gasPrices) {
+            gasOptions = gasPrices;
+          }
         } catch (e) {
           console.log(e);
         }
@@ -255,28 +290,37 @@ module.exports.cron = async function(context) {
   }
 
   // 2. Get Likes for the same cast
-  res = await fetch(mmAPI + '/v2/cast-likes?limit=100&castHash=' + castHash, { 
-    method: 'GET', 
-    headers: {
-        'Authorization': 'Bearer ' + process.env.FARCRAFT_MM_BEARER, 
-        'Content-Type': 'application/json'
+  var more = true;
+  var cursor = "";
+  while (more) {
+    res = await fetch(`${mmAPI}/v2/cast-likes?limit=100&castHash=${castHash}&cursor=${cursor}`, { 
+      method: 'GET', 
+      headers: {
+          'Authorization': 'Bearer ' + process.env.FARCRAFT_MM_BEARER, 
+          'Content-Type': 'application/json'
+      }
+    });
+    var likeResult = await res.json();
+    console.log(JSON.stringify(likeResult));
+    like:
+    for (let j = 0; j < likeResult.result.likes.length; j++) {
+      const like = likeResult.result.likes[j];
+      const userRef = db.collection('farcraft').doc(`1`).collection('users').doc(like.reactor.fid.toString());
+      var doc = await userRef.get();
+      if (doc.exists) {
+        console.log("reactor user doc exists " + JSON.stringify(like.reactor));
+        // mint a Heart
+        await userRef.set({ "OG": true}, {"merge": true});
+      } else {
+        // no op, or create user?
+      } 
     }
-  });
-  var likeResult = await res.json();
-  console.log(JSON.stringify(likeResult));
-  like:
-  for (let j = 0; j < likeResult.result.likes.length; j++) {
-    const like = likeResult.result.likes[j];
-    const userRef = db.collection('farcraft').doc(`1`).collection('users').doc(like.reactor.fid.toString());
-    var doc = await userRef.get();
-    if (doc.exists) {
-      console.log("reactor user doc exists " + JSON.stringify(like.reactor));
-      // mint a Heart
-      await userRef.set({ "OG": true}, {"merge": true});
+    if ("next" in likeResult) {
+      cursor = likeResult.next.cursor;
     } else {
-      // no op, or create user?
-    } 
-  }
+      more = false;
+    }
+  } // while more
 
   return null;
 }
